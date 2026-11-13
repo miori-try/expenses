@@ -178,6 +178,7 @@ body.kb main{padding-bottom:28px}
   <button data-aba="comp"><svg class="ti" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M17.5 14.2c2.4.2 4 1.9 4 4.3"/></svg>Compartilhado</button>
 </div></nav>
 <div class="toast" id="toast"></div>
+<input type="file" id="imp-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 
 <script>
 const IC={more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="7.8" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="16.2" cy="12" r="1" fill="currentColor"/></svg>',edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',del:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>'};
@@ -248,7 +249,7 @@ function toast(t){const el=$("toast");el.textContent=t;el.classList.add("show");
 function mudaMes(d){S.mes=mStr(mIdx(S.mes)+d);render()}
 const nomeMes=()=>{const[y,m]=S.mes.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"})};
 const mesBar=()=>`<div class="mes"><button data-m="-1">‹</button><b>${nomeMes()}</b><button data-m="1">›</button></div>`;
-const head=t=>`<div class="head"><h1>${t}</h1><div class="gw"><button class="gear" data-menu="1" aria-label="Opções">${IC.more}</button>${S.menu?'<div class="pop"><button data-aba="perfil">👤 Perfil</button><button data-aba="rec">💰 Recebimentos</button><button data-exportar="1">📊 Exportar planilha</button></div>':""}</div></div>`;
+const head=t=>`<div class="head"><h1>${t}</h1><div class="gw"><button class="gear" data-menu="1" aria-label="Opções">${IC.more}</button>${S.menu?'<div class="pop"><button data-aba="perfil">👤 Perfil</button><button data-aba="rec">💰 Recebimentos</button><button data-exportar="1">📊 Exportar planilha</button><button data-importar="1">📥 Importar planilha</button></div>':""}</div></div>`;
 
 function itemHTML(g){
   const c=cat(g.categoria),p=g.k==="p";
@@ -262,7 +263,7 @@ function itemHTML(g){
 }
 
 /* ---- Início ---- */
-function renderInicio(){
+function renderInicio0(){
   const R=resumo(S.mes),all=R.it,total=R.total;
   const por={};all.forEach(x=>por[x.categoria]=(por[x.categoria]||0)+x.valor);
   const lista=Object.entries(por).sort((a,b)=>b[1]-a[1]);
@@ -369,24 +370,26 @@ function planoHTML(p){
   <div class="info"><b>${esc(p.descricao)}</b><span class="muted">${st}</span>${p.pessoas>1?`<span class="muted">${brl(bruta(p))}${par?" por parcela":"/mês"} · ÷${p.pessoas} pessoas</span>`:""}</div>
   <div class="val">${brl(minha(p))}<small class="muted">${p.pessoas>1?"sua parte":"/mês"}</small></div></div><div class="acts pa">${ac}</div></div>`;
 }
-function meses(){
-  if(!S.gastos.length&&!S.planos.length)return '<div class="empty">Sem lançamentos ainda.</div>';
+function meses(sc){
+  const L=sc?S.planos.filter(p=>escDe(p)===sc):S.planos;
+  if(sc?!L.length:(!S.gastos.length&&!S.planos.length))return '<div class="empty">Sem lançamentos ainda.</div>';
   const cur=mIdx(hoje().slice(0,7));let ini=cur;
-  S.gastos.forEach(g=>ini=Math.min(ini,mIdx(g.data.slice(0,7))));
-  S.planos.forEach(p=>ini=Math.min(ini,mIdx(p.inicio.slice(0,7))));
+  if(!sc)S.gastos.forEach(g=>ini=Math.min(ini,mIdx(g.data.slice(0,7))));
+  L.forEach(p=>ini=Math.min(ini,mIdx(p.inicio.slice(0,7))));
   ini=Math.max(ini,cur-5);
-  let fim=cur+11;S.planos.forEach(p=>{const u=ultimo(p);if(u)fim=Math.max(fim,Math.min(mIdx(u),cur+47))});
-  const rows=[];for(let i=ini;i<=fim;i++){const m=mStr(i);rows.push([m,itens(m).reduce((s,x)=>s+x.valor,0)])}
+  let fim=cur+11;L.forEach(p=>{const u=ultimo(p);if(u)fim=Math.max(fim,Math.min(mIdx(u),cur+47))});
+  const rows=[];for(let i=ini;i<=fim;i++){const m=mStr(i);rows.push([m,sc?L.reduce((t,p)=>ocorre(p,m)!==null?t+minha(p):t,0):itens(m).reduce((t,x)=>t+x.valor,0)])}
   const mx=Math.max(...rows.map(r=>r[1]),1);
-  return rows.map(([m,t])=>`<button class="mrow ${m===S.mes?"on":""}" data-go="${m}"><span>${mLabel(m)}${mIdx(m)===cur?" •":""}</span><i><u style="width:${t/mx*100}%"></u></i><b>${brl(t)}</b></button>`).join("");
+  return rows.map(([m,t])=>`<button class="mrow ${m===S.mes?"on":""}" ${sc?"data-mesel":"data-go"}="${m}"><span>${mLabel(m)}${mIdx(m)===cur?" •":""}</span><i><u style="width:${t/mx*100}%"></u></i><b>${brl(t)}</b></button>`).join("");
 }
 function renderPlanos(sc,titulo,sub,vazio){
   const L=S.planos.filter(p=>escDe(p)===sc),abre=S.pf&&S.pesc===sc;
-  const tot=L.filter(p=>ocorre(p,S.mes)!==null).reduce((s,p)=>s+minha(p),0);
+  const tot=L.filter(p=>ocorre(p,S.mes)!==null).reduce((t,p)=>t+minha(p),0);
+  const nome={fixos:"gastos fixos",parc:"parcelas",comp:"contas compartilhadas (só a sua parte)"}[sc];
   return head(titulo)+mesBar()+`<div class="card"><div class="row"><b>${sub}</b>${abre?"":`<button class="mini" data-novo="${sc}">＋ Nova</button>`}</div>
   <div class="muted" style="margin-bottom:6px">Neste mês: <b>${brl(tot)}</b></div>
   ${abre?planoForm():""}${L.length?L.map(planoHTML).join(""):(abre?"":`<div class="empty">${vazio}</div>`)}</div>`
-  +(sc==="parc"?`<div class="card"><b>Mês a mês</b><div class="muted" style="margin:2px 0 8px">Total de gastos de cada mês. Toque para ver os detalhes</div>${meses()}</div>`:"");
+  +(L.length?`<div class="card"><b>Total por mês</b><div class="muted" style="margin:2px 0 8px">Quanto vai para ${nome} em cada mês. Toque em um mês para ver os valores dele</div>${meses(sc)}</div>`:"");
 }
 
 /* ---- Recebimentos e guardar dinheiro ---- */
@@ -438,7 +441,7 @@ function renderRec(){
   ${S.rf?recForm():""}${S.receb.length?S.receb.map(recHTML).join(""):(S.rf?"":'<div class="empty">Cadastre seu salário e outras entradas.</div>')}</div>`;
 }
 const renderPerfil=()=>head("Perfil")+`<div class="card"><label style="margin-top:0">Seu nome</label><input id="u-nome" type="text" placeholder="Como devemos te chamar?" value="${esc(S.perfil.nome||"")}">
-  <div class="muted" style="margin-top:10px">O nome aparece na tela inicial. Os dados ficam salvos só neste aparelho.</div></div>${avisosCard()}<div class="card"><b>Seus dados</b><div class="muted" style="margin-top:4px">Baixe uma planilha .xlsx com resumo mensal, lançamentos, contas e recebimentos. Serve também como backup.</div><button class="btn" data-exportar="1">Exportar planilha (.xlsx)</button></div>`;
+  <div class="muted" style="margin-top:10px">O nome aparece na tela inicial. Os dados ficam salvos só neste aparelho.</div></div>${avisosCard()}<div class="card" id="imp-card"><b>Seus dados</b><div class="muted" style="margin-top:4px">Baixe uma planilha .xlsx com resumo mensal, lançamentos, contas e recebimentos. Serve como backup: para restaurar, importe a mesma planilha.</div><button class="btn" data-exportar="1">Exportar planilha (.xlsx)</button><button class="btn sec" data-importar="1">Importar planilha (.xlsx)</button>${S.imp?impHTML():""}</div>`;
 
 /* ---- exportação para planilha .xlsx ---- */
 const TIPO={mensal:"Fixo",parcelado:"Parcela",avulso:"Avulso"};
@@ -488,6 +491,7 @@ async function exportar(){
         return[p.descricao,p.categoria,p.comp?"Compartilhado":par?"Parcela":"Fixo",par?"Parcelado":"Fixo todo mês",p.valor,par?p.parcelas:"",p.pessoas,{formula:par?`E${n}/F${n}`:`E${n}`,result:bruta(p)},{formula:`H${n}/G${n}`,result:minha(p)},dt(p.inicio),f?dt(f):"Sem fim",f&&f<cur?"Encerrada":p.fim?"Desativada":"Ativa"]}),true);
     aba("Recebimentos",[["Descrição",28],["Frequência",14],["Valor",16,BRL],["A partir de",13,"dd/mm/yyyy"],["Encerra após",13,"mmm/yyyy"],["% guardado",12,S.pct%1?"0.0%":"0%"]],
       S.receb.map(r=>[r.descricao,r.tipo==="mensal"?"Todo mês":"Só uma vez",r.valor,dt(r.inicio),r.fim?dt(r.fim):"",r.g?S.pct/100:0]),true);
+    aba("Configurações",[["Item",24],["Valor",24]],[["Nome",S.perfil.nome||""],["Percentual guardado",S.pct]],false);
     const buf=await wb.xlsx.writeBuffer();
     await baixar("meus-gastos-"+hoje()+".xlsx",new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
   }catch(e){toast("Erro ao gerar a planilha")}
@@ -563,6 +567,43 @@ async function exportaIcs(){
   await baixar("vencimentos-meus-gastos.ics",new Blob([L.join("\r\n")],{type:"text/calendar"}));
 }
 
+/* ---- importação da planilha ---- */
+const cv=v=>v&&typeof v==="object"&&!(v instanceof Date)?(v.result!==undefined?v.result:(v.text||"")):v;
+const isoD=v=>{v=cv(v);return v instanceof Date?v.toISOString().slice(0,10):(typeof v==="string"&&/^\d{4}-\d\d-\d\d/.test(v)?v.slice(0,10):"")};
+const numC=v=>{v=cv(v);const n=typeof v==="number"?v:parseFloat(String(v).replace(",","."));return isFinite(n)?n:0};
+const txtC=v=>{v=cv(v);return String(v==null?"":v).trim()};
+async function lerPlanilha(f){
+  if(!f)return;toast("Lendo planilha…");
+  try{await carregaLib()}catch(e){return toast("Sem internet para ler a planilha")}
+  try{
+    const wb=new ExcelJS.Workbook();await wb.xlsx.load(await f.arrayBuffer());
+    const wC=wb.getWorksheet("Contas e parcelas"),wR=wb.getWorksheet("Recebimentos"),wL=wb.getWorksheet("Lançamentos");
+    if(!wC||!wR||!wL)return toast("Esta não parece ser a planilha exportada pelo app");
+    const planos=[],receb=[],gastos=[];let pct=null,nome=null;
+    wC.eachRow((r,n)=>{if(n<2)return;const g=k=>r.getCell(k).value,desc=txtC(g(1)),ini=isoD(g(10));if(!desc||!ini)return;
+      const par=txtC(g(4))==="Parcelado",o={id:uid(),descricao:desc,categoria:txtC(g(2))||"Outros",valor:numC(g(5)),tipo:par?"parcelado":"mensal",parcelas:par?Math.max(1,Math.round(numC(g(6)))):null,pessoas:Math.max(1,Math.round(numC(g(7)))||1),comp:txtC(g(3))==="Compartilhado",inicio:ini};
+      const k=isoD(g(11));if(k){const km=k.slice(0,7);if(!par||km!==mStr(mIdx(ini.slice(0,7))+o.parcelas-1))o.fim=km}
+      planos.push(o)});
+    wR.eachRow((r,n)=>{if(n<2)return;const g=k=>r.getCell(k).value,desc=txtC(g(1)),ini=isoD(g(4));if(!desc||!ini)return;
+      const f6=numC(g(6)),k=isoD(g(5)),o={id:uid(),descricao:desc,tipo:txtC(g(2))==="Todo mês"?"mensal":"unico",valor:numC(g(3)),inicio:ini,g:f6>0};
+      if(k&&o.tipo==="mensal")o.fim=k.slice(0,7);if(f6>0)pct=Math.round(f6*1000)/10;receb.push(o)});
+    wL.eachRow((r,n)=>{if(n<2)return;const g=k=>r.getCell(k).value;if(txtC(g(5))!=="Avulso")return;const data=isoD(g(2));if(!data)return;
+      const c=txtC(g(4))||"Outros",ds=txtC(g(3));gastos.push({id:uid(),data,descricao:ds===c?"":ds,valor:numC(g(8)),categoria:c})});
+    const wK=wb.getWorksheet("Configurações");
+    if(wK)wK.eachRow((r,n)=>{if(n<2)return;const k=txtC(r.getCell(1).value);if(k==="Nome")nome=txtC(r.getCell(2).value);if(k==="Percentual guardado")pct=numC(r.getCell(2).value)});
+    S.imp={gastos,planos,receb,pct,nome};ir("perfil");
+    setTimeout(()=>{const e=$("imp-card");if(e)e.scrollIntoView({behavior:"smooth"})},60);
+  }catch(e){toast("Não consegui ler esta planilha")}
+}
+function aplicaImp(){
+  const m=S.imp;S.gastos=m.gastos;S.planos=m.planos;S.receb=m.receb;if(m.pct!=null)S.pct=m.pct;if(m.nome)S.perfil.nome=m.nome;
+  S.imp=null;S.del=null;S.pf=null;S.rf=null;S.edit=null;save();toast("Dados restaurados");ir("inicio");
+}
+const impHTML=()=>`<div class="prev"><b>Planilha lida</b><br>${S.imp.gastos.length} gastos avulsos · ${S.imp.planos.length} contas e parcelas · ${S.imp.receb.length} recebimentos.<br>Isso substitui os dados que estão no app agora.</div><button class="btn" data-impok="1">Substituir meus dados</button><button class="btn sec" data-impno="1">Cancelar</button>`;
+function renderInicio(){
+  return renderInicio0()+(S.gastos.length||S.planos.length?`<div class="card"><b>Mês a mês</b><div class="muted" style="margin:2px 0 8px">Total de gastos de cada mês. Toque para ver os detalhes</div>${meses()}</div>`:"");
+}
+
 /* ---- telas, navegação e eventos ---- */
 const VIEWS={inicio:renderInicio,
   fixos:()=>renderPlanos("fixos","Gastos fixos","Fixos todo mês","Cadastre aqui aluguel, assinaturas e outros gastos que se repetem todo mês."),
@@ -594,6 +635,10 @@ document.addEventListener("click",e=>{
   const d=t.dataset;
   if(d.exportar){S.menu=false;render();return exportar()}
   if(d.ics)return exportaIcs();
+  if(d.importar){S.menu=false;render();return $("imp-file").click()}
+  if(d.impok)return aplicaImp();
+  if(d.impno){S.imp=null;return render()}
+  if(d.mesel){S.mes=d.mesel;return render()}
   if(d.menu){S.menu=!S.menu;return render()}
   if(d.aba)return ir(d.aba);
   if(d.m)return mudaMes(Number(d.m));
@@ -627,6 +672,7 @@ function onForm(e){
   if(id==="filtro"){if(e.type==="change"){S.filtro=e.target.value;render()}}
   else if(id==="r-pct"){S.pct=Math.min(100,Math.max(0,parseFloat(e.target.value)||0));save();$("r-res").innerHTML=resHTML();$("r-acc").textContent=brl(acumulado())}
   else if(id==="u-nome"){S.perfil.nome=e.target.value.trim();save()}
+  else if(id==="imp-file"){if(e.type==="change"){const f=e.target.files[0];e.target.value="";lerPlanilha(f)}}
   else if(id==="av-on"){if(e.type==="change")ligaAvisos(e.target.checked)}
   else if(id.startsWith("f-"))prevAdd();
   else if(id.startsWith("p-"))prevPlano();

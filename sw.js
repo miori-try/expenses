@@ -1,4 +1,4 @@
-const V="gastos-v2",CORE=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png","icon-180.png"];
+const V="gastos-v4",CORE=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png","icon-180.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()))});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V&&x!=="cg-agenda").map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
 self.addEventListener("fetch",e=>{
